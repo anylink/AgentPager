@@ -3,6 +3,9 @@ import Foundation
 public enum AgentSource: String, Codable, Sendable {
     case codexDesktop
     case codexCLI
+    case claudeCode
+    case codebuddy
+    case openCode
 }
 
 public enum AgentLifecycle: String, Codable, CaseIterable, Sendable {
