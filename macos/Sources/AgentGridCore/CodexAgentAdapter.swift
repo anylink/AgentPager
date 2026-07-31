@@ -62,4 +62,21 @@ public final class CodexAgentAdapter: AgentAdapter {
 
     // 可选能力由 BridgeModel 内部继续直接调用底层 Codex 类，
     // adapter 在 PR2 范围内不重写 scanRollout / loadUsage / readTitle。
+
+    /// PR3 引入：从 `HookEnvelope` 还原为 `CodexHookPayload`，
+    /// 包成 `AgentHookSignal.codex` 返回。
+    /// HookBridgeServer 收到 envelope 后路由到这里，BridgeModel 再拆包喂给现有
+    /// `CodexReducer`。零修改现有 Codex 逻辑。
+    public func reduceHook(envelope: HookEnvelope) -> AgentHookSignal? {
+        do {
+            let rawData = try JSONSerialization.data(
+                withJSONObject: envelope.raw,
+                options: []
+            )
+            let payload = try JSONDecoder().decode(CodexHookPayload.self, from: rawData)
+            return .codex(payload)
+        } catch {
+            return nil
+        }
+    }
 }

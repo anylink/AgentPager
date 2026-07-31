@@ -86,4 +86,27 @@ public sealed class CodexAgentAdapter : IAgentAdapter
     // 因此 adapter 在 PR2 范围内不重写这些方法。
     // 后续 PR 完成 Codex → Adapter 全面迁移时，会让 BridgeRuntime 改为调用
     // IAgentAdapter.ScanRollout / LoadUsage / ReadTitle，从而彻底替换直接持有。
+
+    /// <summary>
+    /// PR3 引入：从 <see cref="HookEnvelope"/> 还原为 <see cref="CodexHookPayload"/>，
+    /// 包成 <see cref="CodexHookSignal"/> 返回。
+    /// HookTcpServer 收到 envelope 后路由到这里，BridgeRuntime 再拆包喂给现有
+    /// <c>CodexEventReducer</c>。零修改现有 Codex 逻辑。
+    /// </summary>
+    public AgentHookSignal? ReduceHook(HookEnvelope envelope)
+    {
+        try
+        {
+            var rawJson = envelope.Raw.GetRawText();
+            if (string.IsNullOrEmpty(rawJson))
+                return null;
+            var payload = JsonSerializer.Deserialize<CodexHookPayload>(rawJson, WireJson.Options);
+            return payload is null ? null : new CodexHookSignal(payload);
+        }
+        catch
+        {
+            // 异常路径：返回 null，HookTcpServer 会丢弃该事件并记录警告。
+            return null;
+        }
+    }
 }

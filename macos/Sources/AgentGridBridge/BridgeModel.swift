@@ -224,7 +224,23 @@ final class BridgeModel {
         lastError = nil
     }
 
-    private func handle(_ hook: CodexHookPayload) {
+    private func handle(_ envelope: HookEnvelope) {
+        // PR3 路由：根据 envelope.source 找 adapter，归约成内部信号
+        guard let adapter = AgentRegistry.get(envelope.source) else {
+            addEvent("收到未注册的 AgentSource=\(envelope.source.rawValue) 的 hook")
+            return
+        }
+        guard let signal = adapter.reduceHook(envelope: envelope) else {
+            addEvent("\(adapter.descriptor.displayName) 未处理 hook 事件 \(envelope.hookEventName)")
+            return
+        }
+        switch signal {
+        case let .codex(hook):
+            handleCodex(hook)
+        }
+    }
+
+    private func handleCodex(_ hook: CodexHookPayload) {
         rolloutObservation.include(hook)
         let commit = catalog.accept(.hook(hook))
         let task = catalog.projection().tasks.first { $0.id == hook.sessionID }

@@ -59,6 +59,22 @@ public sealed record HookEnvelope(
 );
 
 /// <summary>
+/// Adapter 归约 Hook 入站后的统一信号基类。
+/// 每种 Agent 提供自己的 <see cref="IAgentAdapter.ReduceHook"/> 实现，
+/// 把 <see cref="HookEnvelope"/> 转换为其内部 hook reducer 能消费的格式。
+///
+/// 设计动机：HookTcpServer / HookBridgeServer 只负责"按行接收 + source 路由"，
+/// 不再绑定到具体 Agent 的 payload 类型。Agent 特定的反序列化 / 归约全部在
+/// adapter 内部完成，便于未来接入 ClaudeCode / Codebuddy / OpenCode 时增量添加。
+/// </summary>
+public abstract record AgentHookSignal(AgentSource Source);
+
+/// <summary>Codex 的 hook 信号，包回 <see cref="CodexHookPayload"/> 以保持现有
+/// <c>CodexEventReducer</c> 零修改。</summary>
+public sealed record CodexHookSignal(CodexHookPayload Payload)
+    : AgentHookSignal(AgentSource.CodexCLI);
+
+/// <summary>
 /// Agent Adapter 接口。每种 Agent 的"Hook 配置安装 / 事件归约 / rollout 文件读取 /
 /// 额度查询 / 标题读取"都被封装在这里，上层 <c>TaskCatalog</c> 完全不感知 Agent 差异。
 ///
@@ -106,6 +122,14 @@ public interface IAgentAdapter
 
     /// <summary>按 session id 读取任务标题（Codex 通过 session_index.jsonl 读取）。</summary>
     string? ReadTitle(string sessionId) => null;
+
+    /// <summary>
+    /// PR3 引入：把 <see cref="HookEnvelope"/> 归约成该 Agent 的 hook 信号。
+    /// 返回 null 表示当前 adapter 不处理此事件（用于未来 agent 还未实现的占位）。
+    /// HookTcpServer / HookBridgeServer 收到 envelope 后路由到对应 adapter，
+    /// 由 adapter 自行决定如何反序列化和归约。
+    /// </summary>
+    AgentHookSignal? ReduceHook(HookEnvelope envelope) => null;
 }
 
 /// <summary>

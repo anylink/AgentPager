@@ -18,7 +18,7 @@ public sealed record BridgeViewState(
 public sealed class BridgeRuntime : IAsyncDisposable
 {
     private abstract record BridgeEvent;
-    private sealed record HookEvent(CodexHookPayload Hook) : BridgeEvent;
+    private sealed record HookEvent(HookEnvelope Envelope) : BridgeEvent;
     private sealed record RolloutEvent(List<CodexRolloutSignal> Signals) : BridgeEvent;
     private sealed record ControlEvent(string Text) : BridgeEvent;
     private sealed record PhoneCountEvent(int Count) : BridgeEvent;
@@ -213,9 +213,7 @@ public sealed class BridgeRuntime : IAsyncDisposable
                 switch (value)
                 {
                     case HookEvent hook:
-                        _rollout.Include(hook.Hook);
-                        _lastHookAt = DateTimeOffset.Now;
-                        changed = _catalog.Accept(hook.Hook);
+                        changed = HandleHook(hook.Envelope);
                         break;
                     case RolloutEvent rollout:
                         changed = _catalog.Accept(rollout.Signals);
@@ -245,6 +243,38 @@ public sealed class BridgeRuntime : IAsyncDisposable
                 _log.Write("ERROR", error.ToString());
                 PublishState();
             }
+        }
+    }
+
+    /// <summary>
+    /// PR3 起：Hook 处理路径接收通用 <see cref="HookEnvelope"/>。
+    /// 路由到对应 <see cref="IAgentAdapter.ReduceHook"/> 得到内部 hook 信号，
+    /// 然后按信号类型分发到 reducer：
+    /// - <see cref="CodexHookSignal"/>：走现有 Codex rollout + reducer 路径
+    /// - 未来：<c>ClaudeCodeHookSignal</c> / <c>CodebuddyHookSignal</c> / ...
+    /// </summary>
+    private bool HandleHook(HookEnvelope envelope)
+    {
+        var adapter = AgentRegistry.Get(envelope.Source);
+        if (adapter is null)
+        {
+            _log.Write("WARN", $"收到未注册的 AgentSource={envelope.Source} 的 hook，已丢弃。");
+            return false;
+        }
+
+        var signal = adapter.ReduceHook(envelope);
+        _lastHookAt = DateTimeOffset.Now;
+        switch (signal)
+        {
+            case CodexHookSignal codex:
+                _rollout.Include(codex.Payload);
+                return _catalog.Accept(codex.Payload);
+            case null:
+                _log.Write("WARN", $"Adapter {adapter.Descriptor.DisplayName} 返回了 null signal，可能未实现此事件处理。");
+                return false;
+            default:
+                _log.Write("WARN", $"收到未支持的 AgentHookSignal 类型：{signal.GetType().Name}");
+                return false;
         }
     }
 

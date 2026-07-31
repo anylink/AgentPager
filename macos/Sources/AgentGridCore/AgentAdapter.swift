@@ -117,16 +117,42 @@ public protocol AgentAdapter {
     func install(bridgeExecutablePath: String) throws -> HookInstallResult
     func uninstall() throws -> HookInstallResult
 
-    // ─────────────── 可选能力：rollout / 用量 / 标题 ───────────────
-    func scanRollout(since: Date) -> [RolloutSignal]?
+    // ─────────────── 可选能力：rollout / 用量 / 标题 / Hook 归约 ───────────────
+    func scanRollout(since: Date) -> [CodexRolloutSignal]?
     func loadUsage() -> UsageSnapshot?
     func readTitle(sessionId: String) -> String?
+    /// PR3 引入：把 `HookEnvelope` 归约成该 Agent 的 hook 信号。
+    /// 返回 nil 表示当前 adapter 不处理此事件。
+    func reduceHook(envelope: HookEnvelope) -> AgentHookSignal?
 }
 
 extension AgentAdapter {
     public func scanRollout(since: Date) -> [CodexRolloutSignal]? { nil }
     public func loadUsage() -> UsageSnapshot? { nil }
     public func readTitle(sessionId: String) -> String? { nil }
+    public func reduceHook(envelope: HookEnvelope) -> AgentHookSignal? { nil }
+}
+
+/// Adapter 归约 Hook 入站后的统一信号。
+///
+/// 每种 Agent 提供自己的 `AgentAdapter.reduceHook` 实现，
+/// 把 `HookEnvelope` 转换为其内部 hook reducer 能消费的格式。
+///
+/// 设计动机：HookBridgeServer 只负责"按行接收 + source 路由"，
+/// 不再绑定到具体 Agent 的 payload 类型。Agent 特定的反序列化 / 归约全部在
+/// adapter 内部完成，便于未来接入 ClaudeCode / Codebuddy / OpenCode 时增量添加。
+public enum AgentHookSignal {
+    case codex(CodexHookPayload)
+    // 未来扩展：case claudeCode(...), case codebuddy(...), case openCode(...)
+}
+
+extension AgentHookSignal {
+    /// 便捷访问：信号的 AgentSource。
+    public var source: AgentSource {
+        switch self {
+        case .codex: return .codexCLI
+        }
+    }
 }
 
 /// Adapter 注册表。Bridge 启动时遍历 `all` 完成安装/卸载，
