@@ -60,7 +60,21 @@ public sealed class BridgeRuntime : IAsyncDisposable
         _pairingSecret = new PairingSecretStore().LoadOrCreate();
         _catalog = new(_persistence.Load());
         _catalog.ApplyTitles(_titleReader.Load());
+        RegisterAgents();
         State = CreateState();
+    }
+
+    /// <summary>
+    /// 把所有 Agent Adapter 注册到全局 <see cref="AgentRegistry"/>。
+    /// 调用方（UI 层 / TrayController / BridgeRuntime）通过 AgentRegistry.All
+    /// 获取当前支持的全部 Agent，无需硬编码 agent 列表。
+    ///
+    /// PR2 范围：仅注册 Codex。后续 PR 按 docs/agent-adapter-guide.md
+    /// 增加 ClaudeCode / Codebuddy / OpenCode。
+    /// </summary>
+    private void RegisterAgents()
+    {
+        AgentRegistry.Register(new CodexAgentAdapter(_hookConfiguration));
     }
 
     public BridgeSettings Settings { get; }
@@ -98,36 +112,69 @@ public sealed class BridgeRuntime : IAsyncDisposable
         _usageTask = UsageLoop(token);
     }
 
-    public void InstallHook()
+    public void InstallHook(IAgentAdapter adapter)
     {
-        try
+        ArgumentNullException.ThrowIfNull(adapter);
+        var (success, agentName, error) = RunAdapterHook(adapter, install: true, out var result);
+        if (success)
         {
-            var result = _hookConfiguration.Install(Environment.ProcessPath!);
-            _log.Write("INFO", result.Changed ? "Codex Hook 已安装。" : "Codex Hook 已是最新状态。");
+            _log.Write("INFO", result.Changed
+                ? $"{agentName} Hook 已安装。"
+                : $"{agentName} Hook 已是最新状态。");
             _lastError = null;
         }
-        catch (Exception error)
+        else
         {
-            _lastError = $"安装 Hook 失败：{error.Message}";
+            _lastError = error is null
+                ? "找不到可用的 Agent Adapter。"
+                : $"安装 Hook 失败：{error}";
             _log.Write("ERROR", _lastError);
         }
         PublishState();
     }
 
-    public void UninstallHook()
+    public void UninstallHook(IAgentAdapter adapter)
     {
-        try
+        ArgumentNullException.ThrowIfNull(adapter);
+        var (success, agentName, error) = RunAdapterHook(adapter, install: false, out var result);
+        if (success)
         {
-            _ = _hookConfiguration.Uninstall();
+            _log.Write("INFO", $"{agentName} Hook 已移除。");
             _lastError = null;
-            _log.Write("INFO", "Codex Hook 已移除。");
         }
-        catch (Exception error)
+        else
         {
-            _lastError = $"卸载 Hook 失败：{error.Message}";
+            _lastError = error is null
+                ? "找不到可用的 Agent Adapter。"
+                : $"卸载 Hook 失败：{error}";
             _log.Write("ERROR", _lastError);
         }
         PublishState();
+    }
+
+    /// <summary>
+    /// 保留 Codex 默认入口：默认从 <see cref="AgentRegistry"/> 取 CodexCLI Adapter 调用。
+    /// 供主窗口 / 测试代码无 Adapter 引用时使用。
+    /// </summary>
+    public void InstallHook() => InstallHook(AgentRegistry.Get(AgentSource.CodexCLI)
+        ?? throw new InvalidOperationException("AgentRegistry 未注册 Codex Agent Adapter"));
+
+    public void UninstallHook() => UninstallHook(AgentRegistry.Get(AgentSource.CodexCLI)
+        ?? throw new InvalidOperationException("AgentRegistry 未注册 Codex Agent Adapter"));
+
+    /// <summary>
+    /// 通过 <see cref="IAgentAdapter"/> 完成 Hook 安装 / 卸载。返回 (success, agentName, error)。
+    /// </summary>
+    private (bool success, string agentName, string? error) RunAdapterHook(
+        IAgentAdapter adapter,
+        bool install,
+        out HookInstallResult result)
+    {
+        var agentName = adapter.Descriptor.DisplayName;
+        result = install
+            ? adapter.Install(Environment.ProcessPath!)
+            : adapter.Uninstall();
+        return (result.Success, agentName, result.Error);
     }
 
     public void SelectAddress(string address)

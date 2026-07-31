@@ -30,6 +30,7 @@ final class BridgeModel {
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
+        registerAgents()
         publishCatalog()
 
         do {
@@ -110,12 +111,33 @@ final class BridgeModel {
     }
 
     func installHooks() {
+        installHooks(adapter: AgentRegistry.get(.codexCLI))
+    }
+
+    /// 把所有 Agent Adapter 注册到全局 `AgentRegistry`。
+    /// 调用方（UI 层 / BridgeModel / 菜单栏）通过 `AgentRegistry.all`
+    /// 获取当前支持的全部 Agent，无需硬编码 agent 列表。
+    ///
+    /// PR2 范围：仅注册 Codex。后续 PR 按 `docs/agent-adapter-guide.md`
+    /// 增加 ClaudeCode / Codebuddy / OpenCode。
+    private func registerAgents() {
+        AgentRegistry.register(CodexAgentAdapter(hookConfiguration: hookConfiguration))
+    }
+
+    func installHooks(adapter: (any AgentAdapter)?) {
+        guard let adapter else {
+            lastError = "AgentRegistry 未注册 Codex Agent Adapter"
+            return
+        }
+        let displayName = adapter.descriptor.displayName
         do {
-            let change = try hookConfiguration.install(
-                command: hookExecutableURL.path
-            )
-            if change.changed {
-                addEvent("Codex Hook 已安装")
+            let result = try adapter.install(bridgeExecutablePath: hookExecutableURL.path)
+            if let error = result.error {
+                lastError = "安装 Hook 失败：\(error)"
+                return
+            }
+            if result.changed {
+                addEvent("\(displayName) Hook 已安装")
             }
             refreshHookStatus()
         } catch {
@@ -124,10 +146,23 @@ final class BridgeModel {
     }
 
     func uninstallHooks() {
+        uninstallHooks(adapter: AgentRegistry.get(.codexCLI))
+    }
+
+    func uninstallHooks(adapter: (any AgentAdapter)?) {
+        guard let adapter else {
+            lastError = "AgentRegistry 未注册 Codex Agent Adapter"
+            return
+        }
+        let displayName = adapter.descriptor.displayName
         do {
-            let change = try hookConfiguration.uninstall()
-            if change.changed {
-                addEvent("AgentPager Hook 已移除")
+            let result = try adapter.uninstall()
+            if let error = result.error {
+                lastError = "卸载 Hook 失败：\(error)"
+                return
+            }
+            if result.changed {
+                addEvent("\(displayName) Hook 已移除")
             }
             refreshHookStatus()
         } catch {

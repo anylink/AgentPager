@@ -79,9 +79,61 @@ interface AgentAdapter {
 /**
  * 手机端的 Agent 描述符注册表。当前只描述"如何显示"，不直接执行 hook 安装
  * （安装发生在 Bridge 端）。
+ *
+ * 预填充 Codex 描述符；Bridge 端注册其他 Agent 后会推送到手机端，
+ * 由 StateSnapshotPayload 携带，参见后续 PR。
  */
 object AgentRegistry {
     private val descriptors: MutableMap<AgentSource, AgentDescriptor> = mutableMapOf()
+
+    init {
+        // 预填充已知 Agent 的描述符，后续 Bridge 推送的任务会按 source 渲染。
+        register(
+            AgentDescriptor(
+                source = AgentSource.CODEX_CLI,
+                displayName = "Codex",
+                shortName = "CDX",
+                brandColorArgb = 0xFF5BC0BE,
+                iconKey = "ic_agent_codex",
+            )
+        )
+        register(
+            AgentDescriptor(
+                source = AgentSource.CODEX_DESKTOP,
+                displayName = "Codex",
+                shortName = "CDX",
+                brandColorArgb = 0xFF5BC0BE,
+                iconKey = "ic_agent_codex",
+            )
+        )
+        register(
+            AgentDescriptor(
+                source = AgentSource.CLAUDE_CODE,
+                displayName = "Claude Code",
+                shortName = "CLD",
+                brandColorArgb = 0xFFD97757,
+                iconKey = "ic_agent_claude",
+            )
+        )
+        register(
+            AgentDescriptor(
+                source = AgentSource.CODEBUDDY,
+                displayName = "Codebuddy",
+                shortName = "CB",
+                brandColorArgb = 0xFF8B5CF6,
+                iconKey = "ic_agent_codebuddy",
+            )
+        )
+        register(
+            AgentDescriptor(
+                source = AgentSource.OPEN_CODE,
+                displayName = "OpenCode",
+                shortName = "OC",
+                brandColorArgb = 0xFF06B6D4,
+                iconKey = "ic_agent_opencode",
+            )
+        )
+    }
 
     fun register(descriptor: AgentDescriptor) {
         descriptors[descriptor.source] = descriptor

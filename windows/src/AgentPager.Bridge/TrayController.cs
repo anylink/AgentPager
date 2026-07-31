@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
+using AgentPager.Core;
 
 namespace AgentPager.Bridge;
 
@@ -22,14 +23,18 @@ public sealed class TrayController : IDisposable
         _hook = new() { Enabled = false };
         _link = new() { Enabled = false };
         var menu = new ContextMenuStrip();
-        menu.Items.AddRange([
+        var agentMenuItems = BuildAgentMenuItems().ToArray();
+        var items = new List<ToolStripItem>
+        {
             _server, _hook, _link,
             new ToolStripSeparator(),
-            new ToolStripMenuItem("安装或修复 Codex Hook", null, (_, _) => _runtime.InstallHook()),
-            new ToolStripMenuItem("打开 AgentPager 设置", null, (_, _) => showWindow()),
-            new ToolStripSeparator(),
-            new ToolStripMenuItem("退出 AgentPager", null, (_, _) => exit()),
-        ]);
+        };
+        items.AddRange(agentMenuItems);
+        items.Add(new ToolStripSeparator());
+        items.Add(new ToolStripMenuItem("打开 AgentPager 设置", null, (_, _) => showWindow()));
+        items.Add(new ToolStripSeparator());
+        items.Add(new ToolStripMenuItem("退出 AgentPager", null, (_, _) => exit()));
+        menu.Items.AddRange(items.ToArray());
         _icon = new()
         {
             Icon = _ownedIcon,
@@ -39,6 +44,25 @@ public sealed class TrayController : IDisposable
         };
         _icon.DoubleClick += (_, _) => showWindow();
         Refresh();
+    }
+
+    /// <summary>
+    /// 遍历 <see cref="AgentRegistry.All"/> 为每个 Agent Adapter 生成
+    /// "安装或修复 XX Hook" 菜单项。新增 Agent 时无需修改本方法。
+    /// PR2 起：TrayController 完全数据驱动，不再硬编码 agent 名称。
+    /// </summary>
+    private IEnumerable<ToolStripMenuItem> BuildAgentMenuItems()
+    {
+        foreach (var adapter in AgentRegistry.All)
+        {
+            var captured = adapter;
+            var displayName = captured.Descriptor.DisplayName;
+            yield return new ToolStripMenuItem(
+                $"安装或修复 {displayName} Hook",
+                null,
+                (_, _) => _runtime.InstallHook(captured)
+            );
+        }
     }
 
     public void Refresh()
