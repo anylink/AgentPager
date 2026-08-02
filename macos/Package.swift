@@ -15,7 +15,15 @@ let package = Package(
         .target(name: "AgentGridCore"),
         .executableTarget(
             name: "AgentGridBridge",
-            dependencies: ["AgentGridCore"]
+            dependencies: ["AgentGridCore"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "AppInfo.plist"
+                ])
+            ]
         ),
         .executableTarget(
             name: "AgentGridHooks",
