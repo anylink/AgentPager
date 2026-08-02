@@ -1,0 +1,42 @@
+{
+  "apiVersion" : "1",
+  "title" : "Suppress linkd.autoShortcut Noise",
+  "description" : "Hides macOS Intents framework noise emitted by unsigned SPM binaries running under macOS 26+. Functional behavior is unaffected.",
+  "filters" : [
+    {
+      "type" : "regex",
+      "pattern" : "linkd\\.autoShortcut",
+      "enabled" : true,
+      "invert" : true,
+      "caseSensitive" : false
+    },
+    {
+      "type" : "regex",
+      "pattern" : "synchronousRemoteObjectProxy",
+      "enabled" : true,
+      "invert" : true,
+      "caseSensitive" : false
+    },
+    {
+      "type" : "regex",
+      "pattern" : "Process Instance Registry",
+      "enabled" : true,
+      "invert" : true,
+      "caseSensitive" : false
+    },
+    {
+      "type" : "regex",
+      "pattern" : "Cannot index window tabs due to missing main bundle identifier",
+      "enabled" : true,
+      "invert" : true,
+      "caseSensitive" : false
+    },
+    {
+      "type" : "regex",
+      "pattern" : "Error registering app with intents framework",
+      "enabled" : true,
+      "invert" : true,
+      "caseSensitive" : false
+    }
+  ]
+}
